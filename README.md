@@ -1,5 +1,6 @@
 
-# Security Headers Explained – A Simple Guide for Beginners
+# Security Headers Explained 
+#### A Simple Guide for Beginners
 
 
 Security headers are HTTP response headers that help protect your website or API from common web vulnerabilities like cross-site scripting (XSS), clickjacking, and data leaks. Adding the right security headers can boost your site's security score (e.g., on securityheaders.com) to A+ and help keep your users safe.
