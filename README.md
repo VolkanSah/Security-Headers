@@ -17,7 +17,11 @@ php_flag expose_php off
 <IfModule mod_headers.c>
     Header set Cross-Origin-Opener-Policy "same-origin"
     Header set Cross-Origin-Resource-Policy "same-origin"
-    Header set Content-Security-Policy "default-src https: 'self' data:; connect-src 'self'"
+####################################################################################################
+    # Header set Content-Security-Policy "default-src https: 'self' data:; connect-src 'self'"
+    # or if you have inline scripts
+    # Header set Content-Security-Policy "default-src https: 'self' data: 'unsafe-inline'; connect-src 'self'"
+####################################################################################################
     Header set Cross-Origin-Embedder-Policy "require-corp"
     Header set X-Permitted-Cross-Domain-Policies "none"
     Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
