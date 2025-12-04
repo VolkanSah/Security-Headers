@@ -604,3 +604,13 @@ Found this useful?
 ---
 
 **Stay secure. Stay paranoid. 🔒**
+
+
+### Other Stuff
+##### Security Guides:
+
+- [Security Headers — Complete Implementation Guide](https://github.com/VolkanSah/Security-Headers)
+- [Securing FastAPI Applications](https://github.com/VolkanSah/Securing-FastAPI-Applications)
+- [ModSecurity Webserver Protection Guide}(https://github.com/VolkanSah/ModSecurity-Webserver-Protection-Guide)
+- [GPT Security Best Practices](https://github.com/VolkanSah/GPT-Security-Best-Practices)
+- [WPScan – WordPress Security Scanner Guide](https://github.com/VolkanSah/WordPress-Security-Scanner-advanced-use)
