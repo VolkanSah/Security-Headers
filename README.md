@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Security Rating: A+](https://img.shields.io/badge/Security-A+-brightgreen.svg)](https://securityheaders.com)
 
----
+
 
 ## Why Security Headers Matter
 
@@ -16,10 +16,11 @@ Security headers are your first line of defense against:
 - **Data leaks** — unauthorized access to cross-origin resources
 - **MIME-type attacks** — browsers executing malicious content
 - **Referrer leaks** — sensitive URL data exposed to third parties
+- **Base tag injection** — attackers manipulating relative URLs
+- **FLoC/Topics tracking** — privacy-invasive browser features
 
 **Result:** Setting proper headers can boost your security rating from F to A+ in minutes, with zero code changes to your application.
 
----
 
 ## Quick Start
 
@@ -50,7 +51,7 @@ Add this to your `.htaccess` or Apache virtual host config:
 
 ```apache
 # ============================================
-# Security Headers — Production Config
+# Security Headers — Production Config (2025)
 # ============================================
 
 # Hide PHP version (if using PHP)
@@ -64,28 +65,28 @@ php_flag expose_php off
     
     # Content Security Policy
     # OPTION 1: Strict (recommended for new sites)
-    Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
     
     # OPTION 2: Relaxed (for sites with inline scripts/styles)
-    # Header always set Content-Security-Policy "default-src 'self' https: data: 'unsafe-inline'; connect-src 'self'"
+    # Header always set Content-Security-Policy "default-src 'self' https: data: 'unsafe-inline'; connect-src 'self'; base-uri 'self'; object-src 'none'"
     
     # Frame protection
     Header always set X-Frame-Options "SAMEORIGIN"
     
-    # XSS protection
-    Header always set X-XSS-Protection "1; mode=block"
+    # MIME-type protection
     Header always set X-Content-Type-Options "nosniff"
     
     # Download handling
     Header always set X-Download-Options "noopen"
     
-    # Feature policies
-    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()"
+    # Feature policies (2025 updated)
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), interest-cohort=()"
     
     # Referrer policy
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     
     # HTTPS enforcement (only if you have SSL!)
+    # WARNING: Only enable if your ENTIRE site uses HTTPS permanently
     # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     
     # Adobe policy restrictions
@@ -107,6 +108,13 @@ ServerSignature Off
     deny from all
 </LimitExcept>
 ```
+
+### Important Apache Notes
+
+**`Header always` vs `Header set`:**
+- `Header set` → Only applied to successful responses (2xx)
+- `Header always` → Applied to ALL responses including errors (3xx/4xx/5xx)
+- **Always use `always`** for security headers to ensure protection even on error pages
 
 ### Enable required Apache modules
 ```bash
@@ -134,14 +142,13 @@ server {
     add_header Cross-Origin-Resource-Policy "same-origin" always;
     add_header Cross-Origin-Embedder-Policy "require-corp" always;
     
-    # Content Security Policy
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+    # Content Security Policy (2025)
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests" always;
     
     # Frame protection
     add_header X-Frame-Options "SAMEORIGIN" always;
     
-    # XSS protection
-    add_header X-XSS-Protection "1; mode=block" always;
+    # MIME-type protection
     add_header X-Content-Type-Options "nosniff" always;
     
     # Referrer policy
@@ -150,8 +157,8 @@ server {
     # HTTPS enforcement
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
     
-    # Permissions policy
-    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=()" always;
+    # Permissions policy (2025)
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()" always;
     
     # Adobe policies
     add_header X-Permitted-Cross-Domain-Policies "none" always;
@@ -180,10 +187,11 @@ sudo systemctl reload nginx
 ```javascript
 const express = require('express');
 const helmet = require('helmet');
+const crypto = require('crypto');
 
 const app = express();
 
-// Apply all security headers with sensible defaults
+// Apply all security headers with 2025 best practices
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -196,6 +204,9 @@ app.use(helmet({
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
             frameSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            upgradeInsecureRequests: [],
         },
     },
     crossOriginEmbedderPolicy: true,
@@ -209,11 +220,57 @@ app.use(helmet({
     referrerPolicy: { policy: "strict-origin-when-cross-origin" }
 }));
 
+// Additional Permissions-Policy header (Helmet doesn't cover all yet)
+app.use((req, res, next) => {
+    res.setHeader('Permissions-Policy', 
+        'geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()');
+    next();
+});
+
 app.get('/', (req, res) => {
     res.send('Secured with Helmet!');
 });
 
 app.listen(3000);
+```
+
+### Advanced: CSP with Nonces (recommended for inline scripts)
+
+```javascript
+const crypto = require('crypto');
+
+// Middleware to generate nonce per request
+app.use((req, res, next) => {
+    res.locals.nonce = crypto.randomBytes(16).toString('base64');
+    next();
+});
+
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`],
+            styleSrc: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+        },
+    },
+}));
+
+// Use nonce in your templates
+app.get('/', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <script nonce="${res.locals.nonce}">
+                console.log('Inline script allowed with nonce!');
+            </script>
+        </head>
+        <body>Nonce-based CSP</body>
+        </html>
+    `);
+});
 ```
 
 ### Manual implementation (without Helmet)
@@ -223,12 +280,11 @@ app.use((req, res, next) => {
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-    res.setHeader('Content-Security-Policy', "default-src 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; object-src 'none'; base-uri 'self'");
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), interest-cohort=()');
     next();
 });
 ```
@@ -245,10 +301,11 @@ Create `nginx-security.conf`:
 # Include this in your Nginx Docker image
 add_header Cross-Origin-Opener-Policy "same-origin" always;
 add_header Cross-Origin-Resource-Policy "same-origin" always;
-add_header Content-Security-Policy "default-src 'self'" always;
+add_header Content-Security-Policy "default-src 'self'; object-src 'none'; base-uri 'self'" always;
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "interest-cohort=()" always;
 ```
 
 **Dockerfile:**
@@ -276,13 +333,14 @@ async function handleRequest(request) {
     // Clone response to modify headers
     const newResponse = new Response(response.body, response)
     
-    // Add security headers
+    // Add security headers (2025)
     newResponse.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
     newResponse.headers.set('Cross-Origin-Resource-Policy', 'same-origin')
-    newResponse.headers.set('Content-Security-Policy', "default-src 'self'")
+    newResponse.headers.set('Content-Security-Policy', "default-src 'self'; object-src 'none'; base-uri 'self'")
     newResponse.headers.set('X-Frame-Options', 'SAMEORIGIN')
     newResponse.headers.set('X-Content-Type-Options', 'nosniff')
     newResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+    newResponse.headers.set('Permissions-Policy', 'interest-cohort=()')
     
     return newResponse
 }
@@ -307,21 +365,20 @@ WordPress often requires relaxed CSP due to:
     Header always set Cross-Origin-Opener-Policy "same-origin-allow-popups"
     Header always set Cross-Origin-Resource-Policy "cross-origin"
     
-    # Relaxed CSP for WordPress
-    Header always set Content-Security-Policy "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; img-src 'self' https: data:; font-src 'self' https: data:; connect-src 'self' https:"
+    # Relaxed CSP for WordPress (2025)
+    Header always set Content-Security-Policy "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; img-src 'self' https: data:; font-src 'self' https: data:; connect-src 'self' https:; base-uri 'self'; object-src 'none'"
     
     # Frame protection (allows same-origin for admin)
     Header always set X-Frame-Options "SAMEORIGIN"
     
-    # XSS and MIME protection
-    Header always set X-XSS-Protection "1; mode=block"
+    # MIME protection
     Header always set X-Content-Type-Options "nosniff"
     
     # Referrer policy
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     
     # Permissions policy
-    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), interest-cohort=()"
     
     # HSTS (only if SSL is configured)
     # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -339,9 +396,9 @@ function add_security_headers() {
     header('Cross-Origin-Resource-Policy: cross-origin');
     header('X-Frame-Options: SAMEORIGIN');
     header('X-Content-Type-Options: nosniff');
-    header('X-XSS-Protection: 1; mode=block');
     header('Referrer-Policy: strict-origin-when-cross-origin');
-    header("Content-Security-Policy: default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'");
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()');
+    header("Content-Security-Policy: default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; base-uri 'self'; object-src 'none'");
 }
 add_action('send_headers', 'add_security_headers');
 ```
@@ -354,19 +411,41 @@ add_action('send_headers', 'add_security_headers');
 
 #### Content-Security-Policy (CSP)
 **Purpose:** Controls which resources can be loaded  
-**Strict:**
+
+**Strict (2025 recommended):**
 ```
-Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'self'; upgrade-insecure-requests
 ```
+
+**Key 2025 additions:**
+- `object-src 'none'` — Blocks Flash and legacy plugins
+- `base-uri 'self'` — Prevents base tag injection attacks
+- `upgrade-insecure-requests` — Auto-upgrades HTTP to HTTPS
+
 **Relaxed (for legacy sites):**
 ```
-Content-Security-Policy: default-src 'self' https: data: 'unsafe-inline'
+Content-Security-Policy: default-src 'self' https: data: 'unsafe-inline'; base-uri 'self'; object-src 'none'
 ```
 
 **Common CSP issues:**
-- Inline scripts blocked → Move to external `.js` files or use nonces
+- Inline scripts blocked → Use nonces or move to external `.js` files
 - Google Analytics blocked → Add `script-src 'self' https://www.google-analytics.com`
 - Fonts not loading → Add `font-src 'self' https://fonts.gstatic.com`
+
+**CSP with Nonces (best practice):**
+```html
+<!-- Server generates nonce per request -->
+<script nonce="2726c7f26c">
+  console.log('Allowed!');
+</script>
+```
+
+**Subresource Integrity (SRI) for CDNs:**
+```html
+<script src="https://cdn.example.com/lib.js" 
+        integrity="sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/ux..."
+        crossorigin="anonymous"></script>
+```
 
 #### Strict-Transport-Security (HSTS)
 **Purpose:** Forces HTTPS for all connections  
@@ -374,14 +453,46 @@ Content-Security-Policy: default-src 'self' https: data: 'unsafe-inline'
 ```
 Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 ```
-**⚠️ Warning:** Only enable if your entire site uses SSL. Once set, browsers will refuse HTTP for the specified duration.
+
+**⚠️ CRITICAL WARNINGS:**
+1. Only enable if your **entire site** uses SSL permanently
+2. Once set, browsers will refuse HTTP for the specified duration
+3. `preload` directive submits your domain to browser HSTS lists
+4. **Preload is IRREVERSIBLE** — Removal takes months and requires support tickets
+
+**Preload Submission Process:**
+1. Ensure HTTPS works on all subdomains
+2. Set `max-age=31536000` minimum
+3. Submit at https://hstspreload.org
+4. Wait for inclusion in Chromium/Firefox/Safari lists
+5. **Cannot easily undo** — Only submit if 100% certain
+
+**Safe rollout strategy:**
+```apache
+# Week 1: Short max-age for testing
+Header always set Strict-Transport-Security "max-age=300"
+
+# Week 2-4: Increase gradually
+Header always set Strict-Transport-Security "max-age=86400"
+
+# Month 2+: Full deployment
+Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+# Only after 6+ months of stability:
+Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+```
 
 #### X-Frame-Options
 **Purpose:** Prevents clickjacking attacks  
 **Options:**
 - `DENY` — Never allow framing
 - `SAMEORIGIN` — Allow framing from same domain only
-- `ALLOW-FROM https://example.com` — (deprecated, use CSP instead)
+- ~~`ALLOW-FROM`~~ — (deprecated, use CSP `frame-ancestors` instead)
+
+**Modern alternative:** Use CSP `frame-ancestors` directive:
+```
+Content-Security-Policy: frame-ancestors 'self'
+```
 
 ### Important Headers
 
@@ -391,17 +502,33 @@ X-Content-Type-Options: nosniff
 ```
 Prevents browsers from MIME-sniffing responses away from declared content-type.
 
+**Why it matters:** Without this, browsers might execute `image.jpg` as JavaScript if it contains code.
+
 #### Referrer-Policy
 **Options:**
-- `no-referrer` — Never send referrer
-- `strict-origin-when-cross-origin` — (recommended) Full URL for same-origin, origin only for cross-origin
+- `no-referrer` — Never send referrer (breaks some analytics)
+- `strict-origin-when-cross-origin` — **(recommended)** Full URL for same-origin, origin only for cross-origin
 - `same-origin` — Only send for same-origin requests
 
+**Privacy consideration:** Balance between analytics needs and user privacy.
+
 #### Permissions-Policy (formerly Feature-Policy)
+
+**2025 updated syntax:**
 ```
-Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()
+Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()
 ```
-Disables powerful browser features unless explicitly needed.
+
+**New in 2025:**
+- `interest-cohort=()` — Blocks Google FLoC/Topics API (privacy tracking)
+
+**Common permissions:**
+- `geolocation` — GPS location
+- `microphone` — Audio input
+- `camera` — Video input
+- `payment` — Payment Request API
+- `usb` — USB device access
+- `magnetometer`, `gyroscope` — Motion sensors
 
 ### Advanced Headers
 
@@ -426,6 +553,25 @@ Cross-Origin-Embedder-Policy: require-corp
 ```
 **⚠️ Warning:** Can break third-party integrations if not configured carefully.
 
+### Deprecated Headers (2025)
+
+#### ❌ X-XSS-Protection (DO NOT USE)
+```
+# WRONG — This header is deprecated and harmful
+X-XSS-Protection: 1; mode=block
+```
+
+**Why deprecated:**
+- Chrome removed support in 2019
+- Safari implementation has security bugs
+- Can introduce vulnerabilities instead of preventing them
+- Superseded by Content-Security-Policy
+
+**Correct approach:** Rely on CSP instead. If you must set it, disable it:
+```
+X-XSS-Protection: 0
+```
+
 ---
 
 ## Testing & Validation
@@ -440,6 +586,9 @@ Cross-Origin-Embedder-Policy: require-corp
 3. **CSP Evaluator** — https://csp-evaluator.withgoogle.com  
    Validates Content-Security-Policy syntax
 
+4. **HSTS Preload** — https://hstspreload.org  
+   Check preload eligibility and status
+
 ### Command Line Testing
 ```bash
 # Check all security headers
@@ -450,6 +599,9 @@ curl -I https://yoursite.com | grep -i "x-frame-options"
 
 # Check from different location (for CDN testing)
 curl -H "Host: yoursite.com" -I https://cdn-ip-address/
+
+# Verify CSP is applied
+curl -I https://yoursite.com | grep -i "content-security-policy"
 ```
 
 ### Browser DevTools
@@ -458,6 +610,26 @@ curl -H "Host: yoursite.com" -I https://cdn-ip-address/
 3. Refresh page
 4. Click on main document
 5. Check **Response Headers** section
+6. Look for CSP violations in **Console** tab
+
+### Monitor CSP Violations
+
+**Setup CSP reporting:**
+```apache
+# Apache
+Header always set Content-Security-Policy "default-src 'self'; report-uri https://yoursite.com/csp-report"
+
+# Or use report-only mode during testing
+Header always set Content-Security-Policy-Report-Only "default-src 'self'; report-uri https://yoursite.com/csp-report"
+```
+
+**Node.js CSP report endpoint:**
+```javascript
+app.post('/csp-report', express.json({ type: 'application/csp-report' }), (req, res) => {
+    console.log('CSP Violation:', req.body);
+    res.status(204).end();
+});
+```
 
 ---
 
@@ -467,19 +639,23 @@ curl -H "Host: yoursite.com" -I https://cdn-ip-address/
 **Symptom:** Site appears broken, console shows CSP violations  
 **Solution:** Start with a relaxed policy, then tighten:
 ```apache
-# Phase 1: Report-only mode (doesn't block)
+# Phase 1: Report-only mode (doesn't block, only logs)
 Header set Content-Security-Policy-Report-Only "default-src 'self'; report-uri /csp-report"
 
-# Phase 2: After reviewing violations, enable blocking
-Header set Content-Security-Policy "default-src 'self' https: data: 'unsafe-inline'"
+# Phase 2: After reviewing violations, enable blocking with relaxed policy
+Header set Content-Security-Policy "default-src 'self' https: data: 'unsafe-inline'; base-uri 'self'"
+
+# Phase 3: Tighten after confirming no issues
+Header set Content-Security-Policy "default-src 'self'; script-src 'self'; base-uri 'self'; object-src 'none'"
 ```
 
 ### Issue: HSTS locks users out after SSL expires
 **Symptom:** Users can't access site even after fixing SSL  
 **Solution:** 
 1. Renew SSL immediately
-2. Reduce `max-age` initially: `max-age=300` (5 minutes)
+2. Use short `max-age` initially: `max-age=300` (5 minutes)
 3. Gradually increase after confirming stability
+4. **Never use `preload` until 100% certain**
 
 ### Issue: WordPress admin breaks with strict headers
 **Symptom:** Can't save posts, plugins fail to update  
@@ -487,14 +663,26 @@ Header set Content-Security-Policy "default-src 'self' https: data: 'unsafe-inli
 
 ### Issue: Third-party embeds don't load
 **Symptom:** YouTube videos, Google Maps, etc. blocked  
-**Solution:** Adjust CSP frame-src:
+**Solution:** Adjust CSP frame-src and connect-src:
 ```apache
-Header set Content-Security-Policy "default-src 'self'; frame-src 'self' https://www.youtube.com https://www.google.com"
+Header set Content-Security-Policy "default-src 'self'; frame-src 'self' https://www.youtube.com https://www.google.com; connect-src 'self' https://www.google-analytics.com"
+```
+
+### Issue: Google Analytics / Tag Manager blocked
+**Solution:** Add to CSP:
+```apache
+Header set Content-Security-Policy "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com; connect-src 'self' https://www.google-analytics.com"
+```
+
+### Issue: Fonts from Google Fonts blocked
+**Solution:** Add font-src and style-src:
+```apache
+Header set Content-Security-Policy "default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' https://fonts.googleapis.com"
 ```
 
 ---
 
-### Best Practices
+## Best Practices
 
 #### 1. Start conservatively
 Begin with relaxed policies, monitor for issues, then tighten gradually.
@@ -503,41 +691,63 @@ Begin with relaxed policies, monitor for issues, then tighten gradually.
 Never deploy security headers directly to production without testing.
 
 #### 3. Monitor CSP violations
-Implement CSP reporting to catch issues:
-```javascript
-Content-Security-Policy: default-src 'self'; report-uri /csp-report
-```
+Implement CSP reporting to catch issues before users do.
 
 #### 4. Version control your configs
 Keep `.htaccess` / `nginx.conf` in Git to track changes.
 
 #### 5. Document exceptions
-If you must use `'unsafe-inline'`, document WHY in comments.
+If you must use `'unsafe-inline'`, document WHY in comments:
+```apache
+# 'unsafe-inline' required for:
+# - WordPress admin dashboard (uses inline scripts)
+# - Theme customizer (inline styles)
+# TODO: Migrate to nonce-based CSP when possible
+Header set Content-Security-Policy "default-src 'self' 'unsafe-inline'"
+```
 
 #### 6. Regular audits
 Re-scan with securityheaders.com monthly to catch regressions.
 
+#### 7. Use nonces instead of 'unsafe-inline'
+Nonces allow specific inline scripts without blanket permission:
+```javascript
+// Generate per request
+const nonce = crypto.randomBytes(16).toString('base64');
+res.setHeader('Content-Security-Policy', `script-src 'nonce-${nonce}'`);
+```
+
+#### 8. Implement Subresource Integrity (SRI)
+For all third-party scripts:
+```html
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0"
+        integrity="sha384-..."
+        crossorigin="anonymous"></script>
+```
+
 ---
 
-### Platform-Specific Guides
+## Platform-Specific Guides
 
 #### Apache + WordPress + SSL
 ```apache
 <IfModule mod_headers.c>
-    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-    Header always set Content-Security-Policy "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Header always set Content-Security-Policy "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; base-uri 'self'; object-src 'none'"
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set X-Content-Type-Options "nosniff"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "interest-cohort=()"
 </IfModule>
 ```
 
 #### Nginx + Static Site + Cloudflare
 ```nginx
 # Cloudflare already provides some headers, avoid duplication
-add_header Content-Security-Policy "default-src 'self'" always;
+add_header Content-Security-Policy "default-src 'self'; object-src 'none'; base-uri 'self'" always;
 add_header X-Frame-Options "DENY" always;
 add_header X-Content-Type-Options "nosniff" always;
+add_header Permissions-Policy "interest-cohort=()" always;
 ```
 
 #### Node.js API (No Frontend)
@@ -545,13 +755,44 @@ add_header X-Content-Type-Options "nosniff" always;
 app.use(helmet({
     contentSecurityPolicy: false, // Not needed for APIs
     frameguard: { action: 'deny' },
-    hsts: { maxAge: 31536000 }
+    hsts: { maxAge: 31536000 },
+    noSniff: true
 }));
 ```
 
 ---
 
-### Resources
+## Advanced Topics
+
+### Network Error Logging (NEL)
+
+Monitor network-level errors:
+
+```apache
+# Apache
+Header always set NEL '{"report_to":"default","max_age":31536000,"include_subdomains":true}'
+Header always set Report-To '{"group":"default","max_age":31536000,"endpoints":[{"url":"https://yoursite.com/nel-report"}],"include_subdomains":true}'
+```
+
+```javascript
+// Node.js endpoint
+app.post('/nel-report', express.json(), (req, res) => {
+    console.log('Network Error:', req.body);
+    res.status(204).end();
+});
+```
+
+### Certificate Transparency (Expect-CT)
+
+**Note:** Deprecated as of June 2021 (CT now mandatory), but still useful for older browsers:
+
+```apache
+Header always set Expect-CT "max-age=86400, enforce, report-uri='https://yoursite.com/ct-report'"
+```
+
+---
+
+## Resources
 
 #### Official Documentation
 - [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/)
@@ -562,6 +803,8 @@ app.use(helmet({
 - [CSP Generator](https://report-uri.com/home/generate)
 - [HSTS Preload List](https://hstspreload.org/)
 - [Security Headers Scanner](https://securityheaders.com/)
+- [CSP Evaluator](https://csp-evaluator.withgoogle.com/)
+- [SRI Hash Generator](https://www.srihash.org/)
 
 #### Further Reading
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
@@ -570,7 +813,7 @@ app.use(helmet({
 
 ---
 
-### Contributing
+## Contributing
 
 Improvements welcome!
 
@@ -581,13 +824,13 @@ Improvements welcome!
 
 ---
 
-### License
+## License
 
 MIT License — Use freely, modify as needed, no warranty provided.
 
 ---
 
-### Author
+## Author
 [@volkansah](https://github.com/volkansah)
 
 ---
@@ -605,12 +848,14 @@ Found this useful?
 
 **Stay secure. Stay paranoid. 🔒**
 
-
 ### Other Stuff
 ##### Security Guides:
 
 - [Security Headers — Complete Implementation Guide](https://github.com/VolkanSah/Security-Headers)
 - [Securing FastAPI Applications](https://github.com/VolkanSah/Securing-FastAPI-Applications)
 - [ModSecurity Webserver Protection Guide](https://github.com/VolkanSah/ModSecurity-Webserver-Protection-Guide)
-- [GPT Security Best Practices](https://github.com/VolkanSah/GPT-Security-Best-Practices)
+- [AI API Security Best Practices](https://github.com/VolkanSah/GPT-Security-Best-Practices)
 - [WPScan – WordPress Security Scanner Guide](https://github.com/VolkanSah/WordPress-Security-Scanner-advanced-use)
+
+##### Updated
+> 11.12.2025
