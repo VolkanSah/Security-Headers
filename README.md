@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Security Rating: A+](https://img.shields.io/badge/Security-A+-brightgreen.svg)](https://securityheaders.com)
 
-
+---
 
 ## Why Security Headers Matter
 
@@ -21,6 +21,7 @@ Security headers are your first line of defense against:
 
 **Result:** Setting proper headers can boost your security rating from F to A+ in minutes, with zero code changes to your application.
 
+---
 
 ## Quick Start
 
@@ -76,11 +77,12 @@ php_flag expose_php off
     # MIME-type protection
     Header always set X-Content-Type-Options "nosniff"
     
-    # Download handling
-    Header always set X-Download-Options "noopen"
+    # Download handling (Legacy IE8 - optional in 2025)
+    # Header always set X-Download-Options "noopen"
     
     # Feature policies (2025 updated)
-    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), interest-cohort=()"
+    # Note: browsing-topics blocks Google's Topics API (FLoC successor)
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), browsing-topics=(), interest-cohort=()"
     
     # Referrer policy
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
@@ -143,7 +145,8 @@ server {
     add_header Cross-Origin-Embedder-Policy "require-corp" always;
     
     # Content Security Policy (2025)
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests" always;
+    # Note: 'https:' allows loading from ANY https source - restrict to specific domains in production
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests" always;
     
     # Frame protection
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -158,7 +161,8 @@ server {
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
     
     # Permissions policy (2025)
-    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()" always;
+    # browsing-topics blocks Google's Topics API (FLoC successor for ad targeting)
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), browsing-topics=(), interest-cohort=()" always;
     
     # Adobe policies
     add_header X-Permitted-Cross-Domain-Policies "none" always;
@@ -220,10 +224,10 @@ app.use(helmet({
     referrerPolicy: { policy: "strict-origin-when-cross-origin" }
 }));
 
-// Additional Permissions-Policy header (Helmet doesn't cover all yet)
+// Additional Permissions-Policy header (Helmet doesn't cover all 2025 features yet)
 app.use((req, res, next) => {
     res.setHeader('Permissions-Policy', 
-        'geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()');
+        'geolocation=(), microphone=(), camera=(), payment=(), usb=(), browsing-topics=(), interest-cohort=()');
     next();
 });
 
@@ -284,7 +288,7 @@ app.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), interest-cohort=()');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), browsing-topics=(), interest-cohort=()');
     next();
 });
 ```
@@ -305,7 +309,7 @@ add_header Content-Security-Policy "default-src 'self'; object-src 'none'; base-
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-add_header Permissions-Policy "interest-cohort=()" always;
+add_header Permissions-Policy "interest-cohort=(), browsing-topics=()" always;
 ```
 
 **Dockerfile:**
@@ -340,7 +344,7 @@ async function handleRequest(request) {
     newResponse.headers.set('X-Frame-Options', 'SAMEORIGIN')
     newResponse.headers.set('X-Content-Type-Options', 'nosniff')
     newResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
-    newResponse.headers.set('Permissions-Policy', 'interest-cohort=()')
+    newResponse.headers.set('Permissions-Policy', 'browsing-topics=(), interest-cohort=()')
     
     return newResponse
 }
@@ -378,7 +382,7 @@ WordPress often requires relaxed CSP due to:
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     
     # Permissions policy
-    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), interest-cohort=()"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), browsing-topics=(), interest-cohort=()"
     
     # HSTS (only if SSL is configured)
     # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -397,7 +401,7 @@ function add_security_headers() {
     header('X-Frame-Options: SAMEORIGIN');
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
-    header('Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()');
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=(), browsing-topics=(), interest-cohort=()');
     header("Content-Security-Policy: default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; base-uri 'self'; object-src 'none'");
 }
 add_action('send_headers', 'add_security_headers');
@@ -514,13 +518,14 @@ Prevents browsers from MIME-sniffing responses away from declared content-type.
 
 #### Permissions-Policy (formerly Feature-Policy)
 
-**2025 updated syntax:**
+**2025/2026 updated syntax:**
 ```
-Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()
+Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), browsing-topics=(), interest-cohort=()
 ```
 
-**New in 2025:**
-- `interest-cohort=()` — Blocks Google FLoC/Topics API (privacy tracking)
+**New in 2025+:**
+- `browsing-topics=()` — Blocks Google Topics API (FLoC successor for ad targeting)
+- `interest-cohort=()` — Blocks legacy FLoC (kept for older browser compatibility)
 
 **Common permissions:**
 - `geolocation` — GPS location
@@ -737,7 +742,7 @@ For all third-party scripts:
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set X-Content-Type-Options "nosniff"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
-    Header always set Permissions-Policy "interest-cohort=()"
+    Header always set Permissions-Policy "interest-cohort=(), browsing-topics=()"
 </IfModule>
 ```
 
@@ -854,8 +859,6 @@ Found this useful?
 - [Security Headers — Complete Implementation Guide](https://github.com/VolkanSah/Security-Headers)
 - [Securing FastAPI Applications](https://github.com/VolkanSah/Securing-FastAPI-Applications)
 - [ModSecurity Webserver Protection Guide](https://github.com/VolkanSah/ModSecurity-Webserver-Protection-Guide)
-- [AI API Security Best Practices](https://github.com/VolkanSah/GPT-Security-Best-Practices)
-- [WPScan – WordPress Security Scanner Guide](https://github.com/VolkanSah/WordPress-Security-Scanner-advanced-use)
+- [GPT Security Best Practices](https://github.com/VolkanSah/GPT-Security-Best-Practices)
 
-##### Updated
-> 11.12.2025
+> updated 11.12.2025
